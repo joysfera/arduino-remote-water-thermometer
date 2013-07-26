@@ -3,7 +3,7 @@
  *
  * Petr Stehlik
  *
- * GPL
+ * Released under GPL http://www.gnu.org/licenses/gpl.html
  */
 
 #include <avr/wdt.h>
@@ -13,9 +13,10 @@
 
 #include "WaterTempTransmitter.h"
 
+//#define DEBUG
+
 #define ONE_WIRE_BUS_PIN    2    // Data wire is plugged into port 2 on the Arduino
 #define TX433MHZ_PIN        3    // Transmitter Arduino pin
-#define BUS_POWER_PIN       4    // power for DS18B20 one wire bus - doesn't work well for parasite mode
 #define TX_POWER_PIN        5    // power for transmitter
 
 WaterTempTransmitter tx=WaterTempTransmitter(TX433MHZ_PIN, 0x00 /* sensor ID */, 2 /* transmit channel */);
@@ -30,59 +31,59 @@ DallasTemperature sensors(&oneWire);
 
 DeviceAddress tempDeviceAddress; // We'll use this variable to store a found device address
 
+#ifdef DEBUG
+#define debug_init() Serial.begin(9600)
+#define dprintexp(expression) { Serial.print("# "); Serial.print( #expression ); Serial.print( ": " ); Serial.println( expression ); }
+#define dprint(text) Serial.print( text )
+#define dprintln(text) Serial.println( text )
+#else
+#define debug_init()
+#define dprintexp(expression)
+#define dprint(text)
+#define dprintln(text)
+#endif
+
+boolean beep_on_first_tx = true;
+
 void setup()
 {
     // start serial port
-    Serial.begin(9600);
-    Serial.println("DS18B20 433 MHz Thermometer");
+    debug_init();
+    dprintln("DS18B20 433 MHz Thermometer");
     
-    pinMode(BUS_POWER_PIN, OUTPUT);
     pinMode(TX_POWER_PIN, OUTPUT);
     
-    digitalWrite(BUS_POWER_PIN, HIGH);    // power the one wire sensors bus
-
     // Start up the library
     sensors.begin();
 
     // Grab a count of devices on the wire
     int numberOfDevices = sensors.getDeviceCount();
     if (numberOfDevices == 0) {
-        Serial.println("Sensor(s) not found!");
+        dprintln("Sensor(s) not found!");
         while(1);
     }     
 
     // locate devices on the bus
-    Serial.print("Locating devices...");
+    dprintln("Locating devices...");
 
-    Serial.print("Found ");
-    Serial.print(numberOfDevices, DEC);
-    Serial.println(" devices.");
+    dprintexp(numberOfDevices);
 
     // report parasite power requirements
-    Serial.print("Parasite power is: "); 
-    if (sensors.isParasitePowerMode()) Serial.println("ON");
-    else Serial.println("OFF");
+    dprintexp(sensors.isParasitePowerMode());
 
     if(sensors.getAddress(tempDeviceAddress, 0)) {
-        Serial.print("Device found, setting resolution to ");
-        Serial.println(TEMPERATURE_PRECISION, DEC);
-
-        // set the resolution to TEMPERATURE_PRECISION bit (Each Dallas/Maxim device is capable of several different resolutions)
         sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
-
-        Serial.print("Resolution actually set to: ");
-        Serial.print(sensors.getResolution(tempDeviceAddress), DEC); 
-        Serial.println();
+        dprintexp(sensors.getResolution(tempDeviceAddress));
     }
     else {
-        Serial.print("Found ghost device but could not detect address. Check power and cabling");
+        dprintln("Found ghost device but could not detect address. Check power and cabling!");
         while(true) ;
     }
 }
 
 void loop()
 {
-    Serial.print("Requesting temperatures...");
+    dprint("Requesting temperatures... ");
     sensors.requestTemperatures(); // Send the command to get temperatures
     boolean ret = sensors.getAddress(tempDeviceAddress, 0);
     if (ret) {
@@ -116,10 +117,11 @@ void transmitTemperature(DeviceAddress deviceAddress)
 {
     float tempC = sensors.getTempC(deviceAddress);
 
-    tx.send(tempC);
+    tx.send(tempC, false, beep_on_first_tx);
+    
+    beep_on_first_tx = false;
 
-    Serial.print(" ");
-    Serial.println(tempC);
+    dprintln(tempC);
 }
 
 void sleepNow()
