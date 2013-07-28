@@ -18,6 +18,7 @@
 #define ONE_WIRE_BUS_PIN    2    // Data wire is plugged into port 2 on the Arduino
 #define TX433MHZ_PIN        3    // Transmitter Arduino pin
 #define TX_POWER_PIN        5    // power for transmitter
+#define LED_BLINK          13    // LED indicator of transmitting
 
 WaterTempTransmitter tx=WaterTempTransmitter(TX433MHZ_PIN, 0x00 /* sensor ID */, 2 /* transmit channel */);
 
@@ -52,6 +53,8 @@ void setup()
     dprintln("DS18B20 433 MHz Thermometer");
     
     pinMode(TX_POWER_PIN, OUTPUT);
+    pinMode(LED_BLINK, OUTPUT);
+    digitalWrite(LED_BLINK, LOW);
     
     // Start up the library
     sensors.begin();
@@ -89,9 +92,10 @@ void loop()
     if (ret) {
         // transmit the temperature
         digitalWrite(TX_POWER_PIN, HIGH);    // power the transmitter
-        delay(10);
+        digitalWrite(LED_BLINK, HIGH);
+        delay(50);
         transmitTemperature(tempDeviceAddress); // Use a simple function to print out the data
-        delay(10);
+        digitalWrite(LED_BLINK, LOW);
         digitalWrite(TX_POWER_PIN, LOW);     // disable the transmitter
     }
 
