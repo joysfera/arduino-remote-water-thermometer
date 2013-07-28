@@ -63,7 +63,7 @@ void setup()
     int numberOfDevices = sensors.getDeviceCount();
     if (numberOfDevices == 0) {
         dprintln("Sensor(s) not found!");
-        while(1);
+        dead_end();
     }     
 
     // locate devices on the bus
@@ -80,7 +80,7 @@ void setup()
     }
     else {
         dprintln("Found ghost device but could not detect address. Check power and cabling!");
-        while(true) ;
+        dead_end();
     }
 }
 
@@ -88,17 +88,22 @@ void loop()
 {
     dprint("Requesting temperatures... ");
     sensors.requestTemperatures(); // Send the command to get temperatures
-    boolean ret = sensors.getAddress(tempDeviceAddress, 0);
-    if (ret) {
-        // transmit the temperature
-        digitalWrite(TX_POWER_PIN, HIGH);    // power the transmitter
-        digitalWrite(LED_BLINK, HIGH);
-        delay(50);
-        transmitTemperature(tempDeviceAddress); // Use a simple function to print out the data
-        digitalWrite(LED_BLINK, LOW);
-        digitalWrite(TX_POWER_PIN, LOW);     // disable the transmitter
-    }
 
+    // fetch address of device (to initialize parasitely powered device?) and read temperature
+    // use -0,1 C to indicate error reading the temperature
+    float tempC = sensors.getAddress(tempDeviceAddress, 0) ? sensors.getTempC(tempDeviceAddress) : -0.1f;
+
+    // transmit the temperature
+    digitalWrite(TX_POWER_PIN, HIGH);    // power the transmitter
+    digitalWrite(LED_BLINK, HIGH);       // blink to indicate the transmit
+    delay(50);
+    tx.send(tempC, false, beep_on_first_tx);
+    digitalWrite(LED_BLINK, LOW);
+    digitalWrite(TX_POWER_PIN, LOW);     // disable power to the transmitter
+    beep_on_first_tx = false;
+    dprintln(tempC);
+
+    // sleep for 3 x 8 seconds
     for(int i=0; i<3; i++) {
         wdt_reset();                         // Get ready to go to sleep...
         watchdogEnable();                    // Turn on the watchdog timer
@@ -114,18 +119,6 @@ void watchdogEnable() {                // Turn on watchdog timer; interrupt mode
     //WDTCSR = B01100000;                // 4 Second Timeout
     WDTCSR = B01100001;                  // 8 Second Timeout
     sei();
-}
-
-// function to transmit the temperature of a device
-void transmitTemperature(DeviceAddress deviceAddress)
-{
-    float tempC = sensors.getTempC(deviceAddress);
-
-    tx.send(tempC, false, beep_on_first_tx);
-    
-    beep_on_first_tx = false;
-
-    dprintln(tempC);
 }
 
 void sleepNow()
@@ -163,3 +156,14 @@ ISR (WDT_vect) {                       // WDT Wakeup
     wdt_disable();
     sei();
 }
+
+void dead_end()
+{
+    while(true) {
+        digitalWrite(LED_BLINK, HIGH);
+        delay(50);
+        digitalWrite(LED_BLINK, LOW);
+        delay(450);
+    }
+}
+
