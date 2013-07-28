@@ -17,6 +17,7 @@
 
 #define ONE_WIRE_BUS_PIN    2    // Data wire is plugged into port 2 on the Arduino
 #define TX433MHZ_PIN        3    // Transmitter Arduino pin
+#define ONEWIRE_POWER_PIN   4    // power for one wire bus
 #define TX_POWER_PIN        5    // power for transmitter
 #define LED_BLINK          13    // LED indicator of transmitting
 
@@ -51,11 +52,15 @@ void setup()
     // start serial port
     debug_init();
     dprintln("DS18B20 433 MHz Thermometer");
-    
+
+    pinMode(ONEWIRE_POWER_PIN, OUTPUT);
     pinMode(TX_POWER_PIN, OUTPUT);
     pinMode(LED_BLINK, OUTPUT);
     digitalWrite(LED_BLINK, LOW);
-    
+
+    digitalWrite(ONEWIRE_POWER_PIN, HIGH);    // power the one wire bus
+    delay(250);
+
     // Start up the library
     sensors.begin();
 
@@ -86,12 +91,17 @@ void setup()
 
 void loop()
 {
+    digitalWrite(ONEWIRE_POWER_PIN, HIGH);    // power the one wire bus
+    delay(250);
+
     dprint("Requesting temperatures... ");
     sensors.requestTemperatures(); // Send the command to get temperatures
 
     // fetch address of device (to initialize parasitely powered device?) and read temperature
     // use -0,1 C to indicate error reading the temperature
     float tempC = sensors.getAddress(tempDeviceAddress, 0) ? sensors.getTempC(tempDeviceAddress) : -0.1f;
+
+    digitalWrite(ONEWIRE_POWER_PIN, LOW);     // disable power to the one wire bus
 
     // transmit the temperature
     digitalWrite(TX_POWER_PIN, HIGH);    // power the transmitter
@@ -111,7 +121,9 @@ void loop()
     }
 }
  
-void watchdogEnable() {                // Turn on watchdog timer; interrupt mode every 8.0s
+// Turn on watchdog timer; interrupt mode every 8.0s
+void watchdogEnable()
+{
     cli();
     MCUSR = 0;
     WDTCSR |= B00011000;
@@ -123,35 +135,37 @@ void watchdogEnable() {                // Turn on watchdog timer; interrupt mode
 
 void sleepNow()
 {
-  /* Now is the time to set the sleep mode. In the Atmega8 datasheet
-   * http://www.atmel.com/dyn/resources/prod_documents/doc2486.pdf on page 35
-   * there is a list of sleep modes which explains which clocks and 
-   * wake up sources are available in which sleep modes.
-   *
-   * In the avr/sleep.h file, the call names of these sleep modus are to be found:
-   *
-   * The 5 different modes are:
-   *     SLEEP_MODE_IDLE         -the least power savings 
-   *     SLEEP_MODE_ADC
-   *     SLEEP_MODE_PWR_SAVE
-   *     SLEEP_MODE_STANDBY
-   *     SLEEP_MODE_PWR_DOWN     -the most power savings
-   *
-   *  the power reduction management &lt;avr/power.h&gt;  is described in 
-   *  http://www.nongnu.org/avr-libc/user-manual/group__avr__power.html
-   */
-      
-  set_sleep_mode(SLEEP_MODE_PWR_SAVE); // Sleep mode is set here
-   
-  sleep_enable();                      // Enables the sleep bit in the mcucr register
-                                       // so sleep is possible. just a safety pin 
-  sleep_mode();                        // Here the device is actually put to sleep!!
-                                       // THE PROGRAM CONTINUES FROM HERE AFTER WAKING UP
-  sleep_disable();                     // Dirst thing after waking from sleep:
-                                       // disable sleep...
+    /* Now is the time to set the sleep mode. In the Atmega8 datasheet
+     * http://www.atmel.com/dyn/resources/prod_documents/doc2486.pdf on page 35
+     * there is a list of sleep modes which explains which clocks and
+     * wake up sources are available in which sleep modes.
+     *
+     * In the avr/sleep.h file, the call names of these sleep modus are to be found:
+     *
+     * The 5 different modes are:
+     *     SLEEP_MODE_IDLE         -the least power savings
+     *     SLEEP_MODE_ADC
+     *     SLEEP_MODE_PWR_SAVE
+     *     SLEEP_MODE_STANDBY
+     *     SLEEP_MODE_PWR_DOWN     -the most power savings
+     *
+     *  the power reduction management &lt;avr/power.h&gt;  is described in
+     *  http://www.nongnu.org/avr-libc/user-manual/group__avr__power.html
+     */
+
+    set_sleep_mode(SLEEP_MODE_PWR_SAVE); // Sleep mode is set here
+
+    sleep_enable();                      // Enables the sleep bit in the mcucr register
+                                         // so sleep is possible. just a safety pin
+    sleep_mode();                        // Here the device is actually put to sleep!!
+                                         // THE PROGRAM CONTINUES FROM HERE AFTER WAKING UP
+    sleep_disable();                     // First thing after waking from sleep:
+                                         // disable sleep...
 }
 
-ISR (WDT_vect) {                       // WDT Wakeup
+// WDT Wakeup
+ISR (WDT_vect)
+{
     cli();
     wdt_disable();
     sei();
@@ -166,4 +180,3 @@ void dead_end()
         delay(450);
     }
 }
-
