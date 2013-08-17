@@ -10,6 +10,7 @@
 #include <avr/sleep.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <VirtualWire.h>
 
 #include "WaterTempTransmitter.h"
 
@@ -56,6 +57,8 @@ void setup()
     pinMode(ONEWIRE_POWER_PIN, OUTPUT);
     pinMode(TX_POWER_PIN, OUTPUT);
     pinMode(LED_BLINK, OUTPUT);
+    pinMode(A0, INPUT);
+
     digitalWrite(LED_BLINK, LOW);
 
     digitalWrite(ONEWIRE_POWER_PIN, HIGH);    // power the one wire bus
@@ -87,6 +90,9 @@ void setup()
         dprintln("Found ghost device but could not detect address. Check power and cabling!");
         dead_end();
     }
+
+    vw_set_tx_pin(TX433MHZ_PIN);
+    vw_setup(2000);	 // Bits per sec
 }
 
 void loop()
@@ -98,17 +104,22 @@ void loop()
     sensors.requestTemperatures(); // Send the command to get temperatures
 
     // fetch address of device (to initialize parasitely powered device?) and read temperature
-    // use -0,1 C to indicate error reading the temperature
+    // use -0.1 C to indicate error reading the temperature
     float tempC = sensors.getAddress(tempDeviceAddress, 0) ? sensors.getTempC(tempDeviceAddress) : -0.1f;
 
     digitalWrite(ONEWIRE_POWER_PIN, LOW);     // disable power to the one wire bus
 
     // transmit the temperature
     digitalWrite(TX_POWER_PIN, HIGH);    // power the transmitter
+
+    tx.send(tempC, false, beep_on_first_tx);
+
     digitalWrite(LED_BLINK, HIGH);       // blink to indicate the transmit
     delay(50);
-    tx.send(tempC, false, beep_on_first_tx);
     digitalWrite(LED_BLINK, LOW);
+
+    vwSendTempAndMore(tempC);
+
     digitalWrite(TX_POWER_PIN, LOW);     // disable power to the transmitter
     beep_on_first_tx = false;
     dprintln(tempC);
@@ -179,4 +190,49 @@ void dead_end()
         digitalWrite(LED_BLINK, LOW);
         delay(450);
     }
+}
+
+void vwSendTempAndMore(float temp)
+{
+    char msg[VW_MAX_MESSAGE_LEN] = "Bazen:";
+
+    int t = (int)(temp * 10);
+    itoa(t, msg + strlen(msg), DEC);
+    strcat(msg, ":");
+
+    long vcc = readVcc();
+    itoa(vcc, msg + strlen(msg), DEC);
+    strcat(msg, ":");
+
+    long solar = analogRead(A0) * vcc / 511L; // 1023 = vcc * 2 (voltage divider on A0)
+    itoa(solar, msg + strlen(msg), DEC);
+
+    vw_send((uint8_t *)msg, strlen(msg));
+    vw_wait_tx(); // Wait until the whole message is gone
+}
+
+long readVcc() {
+  // Read 1.1V reference against AVcc
+  // set the reference to Vcc and the measurement to the internal 1.1V reference
+  #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
+    ADMUX = _BV(MUX5) | _BV(MUX0);
+  #elif defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
+    ADMUX = _BV(MUX3) | _BV(MUX2);
+  #else
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #endif
+
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Start conversion
+  while (bit_is_set(ADCSRA,ADSC)); // measuring
+
+  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH
+  uint8_t high = ADCH; // unlocks both
+
+  long result = (high<<8) | low;
+
+  result = 1119162L / result; // Calculate Vcc (in mV); 1119162 = 1.094*1023*1000
+  return result; // Vcc in millivolts
 }
