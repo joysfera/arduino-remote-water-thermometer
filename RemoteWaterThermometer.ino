@@ -47,6 +47,7 @@ DeviceAddress tempDeviceAddress; // We'll use this variable to store a found dev
 #endif
 
 boolean beep_on_first_tx = true;
+long vcc;
 
 void setup()
 {
@@ -112,10 +113,13 @@ void loop()
     // transmit the temperature
     digitalWrite(TX_POWER_PIN, HIGH);    // power the transmitter
 
-    tx.send(tempC, false, beep_on_first_tx);
+    vcc = readVcc();
+    boolean low_battery = (vcc < 3700);
+
+    tx.send(tempC, low_battery, beep_on_first_tx);
 
     digitalWrite(LED_BLINK, HIGH);       // blink to indicate the transmit
-    delay(50);
+    delay(5);
     digitalWrite(LED_BLINK, LOW);
 
     vwSendTempAndMore(tempC);
@@ -164,7 +168,7 @@ void sleepNow()
      *  http://www.nongnu.org/avr-libc/user-manual/group__avr__power.html
      */
 
-    set_sleep_mode(SLEEP_MODE_PWR_SAVE); // Sleep mode is set here
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN); // Sleep mode is set here
 
     sleep_enable();                      // Enables the sleep bit in the mcucr register
                                          // so sleep is possible. just a safety pin
@@ -200,7 +204,6 @@ void vwSendTempAndMore(float temp)
     itoa(t, msg + strlen(msg), DEC);
     strcat(msg, ":");
 
-    long vcc = readVcc();
     itoa(vcc, msg + strlen(msg), DEC);
     strcat(msg, ":");
 
