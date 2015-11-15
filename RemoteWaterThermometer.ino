@@ -169,13 +169,15 @@ void sleepNow()
      */
 
     byte adcsra = ADCSRA;                // save the ADC Control and Status Register A
-    ADCSRA = 0;                          // disable the ADC
+    ADCSRA = 0;                          // disable the ADC (saves 300 µA)
 
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // Sleep mode is set here
-
+    cli();
     sleep_enable();                      // Enables the sleep bit in the mcucr register
                                          // so sleep is possible. just a safety pin
-    sleep_mode();                        // Here the device is actually put to sleep!!
+    sleep_bod_disable();                 // disable brown-out detection while sleeping (20-25 µA)
+    sei();
+    sleep_cpu();                         // Here the device is actually put to sleep!!
                                          // THE PROGRAM CONTINUES FROM HERE AFTER WAKING UP
     sleep_disable();                     // First thing after waking from sleep:
                                          // disable sleep...
