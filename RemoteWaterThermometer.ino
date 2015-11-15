@@ -168,6 +168,9 @@ void sleepNow()
      *  http://www.nongnu.org/avr-libc/user-manual/group__avr__power.html
      */
 
+    byte adcsra = ADCSRA;                // save the ADC Control and Status Register A
+    ADCSRA = 0;                          // disable the ADC
+
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // Sleep mode is set here
 
     sleep_enable();                      // Enables the sleep bit in the mcucr register
@@ -176,6 +179,7 @@ void sleepNow()
                                          // THE PROGRAM CONTINUES FROM HERE AFTER WAKING UP
     sleep_disable();                     // First thing after waking from sleep:
                                          // disable sleep...
+    ADCSRA = adcsra;                     // restore ADCSRA = re-enable the ADC
 }
 
 // WDT Wakeup
