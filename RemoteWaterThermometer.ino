@@ -128,8 +128,8 @@ void loop()
     beep_on_first_tx = false;
     dprintln(tempC);
 
-    // sleep for 3 x 8 seconds
-    for(int i=0; i<3; i++) {
+    // sleep for 5 x 8 seconds
+    for(byte i=0; i<5; i++) {
         wdt_reset();                         // Get ready to go to sleep...
         watchdogEnable();                    // Turn on the watchdog timer
         sleepNow();                          // Go to sleep, watchdog timer will wake later
@@ -211,11 +211,11 @@ void vwSendTempAndMore(float temp)
     itoa(vcc, msg + strlen(msg), DEC);
     strcat(msg, ":");
 
-    long solar = analogRead(A0) * vcc / 511L; // 1023 = vcc * 2 (voltage divider on A0)
+    unsigned int solar = analogRead(A0) * vcc / 512UL; // 1024 = vcc * 2 (voltage divider on A0)
     itoa(solar, msg + strlen(msg), DEC);
 
     vw_send((uint8_t *)msg, strlen(msg));
-    vw_wait_tx(); // Wait until the whole message is gone
+    vw_wait_tx(); // Wait until the whole message is sent
 }
 
 unsigned int readVcc() {
