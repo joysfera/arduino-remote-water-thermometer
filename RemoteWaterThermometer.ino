@@ -24,7 +24,7 @@
 
 WaterTempTransmitter tx=WaterTempTransmitter(TX433MHZ_PIN, 0x00 /* sensor ID */, 2 /* transmit channel */);
 
-#define TEMPERATURE_PRECISION 11
+#define TEMPERATURE_PRECISION 11 // 375 milliseconds for temperature conversion
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS_PIN);
@@ -68,30 +68,6 @@ void setup()
     // Start up the library
     sensors.begin();
 
-    // Grab a count of devices on the wire
-    int numberOfDevices = sensors.getDeviceCount();
-    if (numberOfDevices == 0) {
-        dprintln("Sensor(s) not found!");
-        dead_end();
-    }     
-
-    // locate devices on the bus
-    dprintln("Locating devices...");
-
-    dprintexp(numberOfDevices);
-
-    // report parasite power requirements
-    dprintexp(sensors.isParasitePowerMode());
-
-    if(sensors.getAddress(tempDeviceAddress, 0)) {
-        sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
-        dprintexp(sensors.getResolution(tempDeviceAddress));
-    }
-    else {
-        dprintln("Found ghost device but could not detect address. Check power and cabling!");
-        dead_end();
-    }
-
     vw_set_tx_pin(TX433MHZ_PIN);
     vw_setup(2000);	 // Bits per sec
 }
@@ -99,14 +75,17 @@ void setup()
 void loop()
 {
     digitalWrite(ONEWIRE_POWER_PIN, HIGH);    // power the one wire bus
-    delay(250);
+    delay(50);
 
-    dprint("Requesting temperatures... ");
-    sensors.requestTemperatures(); // Send the command to get temperatures
+    float tempC = -20.0f;
+    if(sensors.getAddress(tempDeviceAddress, 0)) {
+        sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
 
-    // fetch address of device (to initialize parasitely powered device?) and read temperature
-    // use -0.1 C to indicate error reading the temperature
-    float tempC = sensors.getAddress(tempDeviceAddress, 0) ? sensors.getTempC(tempDeviceAddress) : -0.1f;
+        dprint("Requesting temperatures... ");
+        sensors.requestTemperatures(); // Send the command to get temperatures
+
+        tempC = sensors.getTempC(tempDeviceAddress);
+    }
 
     digitalWrite(ONEWIRE_POWER_PIN, LOW);     // disable power to the one wire bus
 
@@ -128,12 +107,16 @@ void loop()
     beep_on_first_tx = false;
     dprintln(tempC);
 
-    // sleep for 5 x 8 seconds
+#ifdef DEBUG
+    delay(3000);
+#else
+    // sleep for 5 x 8 = 40 seconds
     for(byte i=0; i<5; i++) {
         wdt_reset();                         // Get ready to go to sleep...
         watchdogEnable();                    // Turn on the watchdog timer
-        sleepNow();                          // Go to sleep, watchdog timer will wake later
+        sleepNow();                          // Go to sleep, watchdog timer will wake us up in 8 seconds
     }
+#endif
 }
  
 // Turn on watchdog timer; interrupt mode every 8.0s
@@ -188,16 +171,6 @@ void sleepNow()
 ISR(WDT_vect)
 {
     wdt_disable();
-}
-
-void dead_end()
-{
-    while(true) {
-        digitalWrite(LED_BLINK, HIGH);
-        delay(50);
-        digitalWrite(LED_BLINK, LOW);
-        delay(450);
-    }
 }
 
 void vwSendTempAndMore(float temp)
