@@ -24,7 +24,7 @@
 
 WaterTempTransmitter tx=WaterTempTransmitter(TX433MHZ_PIN, 0x00 /* sensor ID */, 2 /* transmit channel */);
 
-#define TEMPERATURE_PRECISION 11 // 375 milliseconds for temperature conversion
+#define TEMPERATURE_PRECISION 11 // 375 milliseconds for temperature conversion is better than 750 ms
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS_PIN);
@@ -63,10 +63,13 @@ void setup()
     digitalWrite(LED_BLINK, LOW);
 
     digitalWrite(ONEWIRE_POWER_PIN, HIGH);    // power the one wire bus
-    delay(250);
+    delay(50);
 
     // Start up the library
     sensors.begin();
+    if(sensors.getAddress(tempDeviceAddress, 0)) {
+        sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
+    }
 
     vw_set_tx_pin(TX433MHZ_PIN);
     vw_setup(2000);	 // Bits per sec
@@ -77,10 +80,8 @@ void loop()
     digitalWrite(ONEWIRE_POWER_PIN, HIGH);    // power the one wire bus
     delay(50);
 
-    float tempC = -20.0f;
+    float tempC = -33.3f;
     if(sensors.getAddress(tempDeviceAddress, 0)) {
-        sensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
-
         dprint("Requesting temperatures... ");
         sensors.requestTemperatures(); // Send the command to get temperatures
 
